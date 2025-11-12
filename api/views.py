@@ -80,6 +80,12 @@ class MemberDetailView(APIView):
 
 
 class AdsListCreateView(APIView):
+    def get_permissions(self):
+        # Allow anonymous access for listing (landing page), require auth for creation
+        if self.request.method == "GET":
+            return []
+        return [IsAuthenticated()]
+
     @extend_schema(responses={200: AdSerializer})
     def get(self, request):
         qs = Ad.objects.select_related("author").all().order_by("-created_at")
@@ -136,8 +142,6 @@ class AdsListCreateView(APIView):
         }
         return Response(data)
 
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(request=AdCreateUpdateSerializer, responses={201: AdSerializer})
     def post(self, request):
         serializer = AdCreateUpdateSerializer(data=request.data)
@@ -148,6 +152,12 @@ class AdsListCreateView(APIView):
 
 
 class AdDetailView(APIView):
+    def get_permissions(self):
+        # Allow anonymous access for reading, auth required for update/delete
+        if self.request.method == "GET":
+            return []
+        return [IsAuthenticated()]
+
     @extend_schema(responses={200: AdSerializer})
     def get(self, request, ad_id: int):
         try:
@@ -155,8 +165,6 @@ class AdDetailView(APIView):
         except Ad.DoesNotExist:
             return Response({"detail": "Объявление не найдено"}, status=404)
         return Response(AdSerializer(ad).data)
-
-    permission_classes = [IsAuthenticated]
 
     @extend_schema(request=AdCreateUpdateSerializer, responses={200: AdSerializer})
     def put(self, request, ad_id: int):
