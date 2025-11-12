@@ -3,44 +3,351 @@ info:
   title: Easyapp API
   version: 1.0.0
   description: API documentation for easyapp
-paths:
-  /api/hello/:
-    get:
-      operationId: api_hello_retrieve
-      description: Get a hello world message
-      tags:
-      - api
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Message'
-          description: ''
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
+    MemberPublic:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        avatar_url: { type: string }
+        phone: { type: string }
+        about: { type: string }
+        date_joined: { type: string, format: date-time }
+      required: [id, name]
+    MemberMe:
+      allOf:
+        - $ref: '#/components/schemas/MemberPublic'
+        - type: object
+          properties:
+            email: { type: string, format: email }
+    RegisterRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+        name: { type: string }
+      required: [email, password, name]
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+      required: [email, password]
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        member: { $ref: '#/components/schemas/MemberMe' }
+    MemberUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        avatar_url: { type: string }
+        phone: { type: string }
+        about: { type: string }
+    Ad:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        category:
+          type: string
+          enum: [auto, realty]
+        phone: { type: string }
+        condition:
+          type: string
+          enum: [new, used]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        author: { $ref: '#/components/schemas/MemberPublic' }
+      required: [id, title, price, category, phone, condition]
+    AdCreateUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        category: { type: string, enum: [auto, realty] }
+        phone: { type: string }
+        condition: { type: string, enum: [new, used] }
+      required: [title, description, price, category, phone, condition]
+    AdsListResponse:
+      type: object
+      properties:
+        count: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/Ad' }
+    ChatThread:
+      type: object
+      properties:
+        id: { type: integer }
+        user1: { $ref: '#/components/schemas/MemberPublic' }
+        user2: { $ref: '#/components/schemas/MemberPublic' }
+        ad:
+          type: integer
+          nullable: true
+        created_at: { type: string, format: date-time }
     Message:
       type: object
       properties:
-        message:
-          type: string
-          maxLength: 200
-        timestamp:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - message
-      - timestamp
-  securitySchemes:
-    basicAuth:
-      type: http
-      scheme: basic
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: sessionid
+        id: { type: integer }
+        thread: { type: integer }
+        sender: { $ref: '#/components/schemas/MemberPublic' }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+        is_read: { type: boolean }
+    MessageCreate:
+      type: object
+      properties:
+        text: { type: string }
+      required: [text]
+paths:
+  /api/auth/register/:
+    post:
+      tags: [auth]
+      summary: Register a new member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Registered member
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberMe' }
+  /api/auth/login/:
+    post:
+      tags: [auth]
+      summary: Login and receive JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: JWT token and member info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+  /api/members/me/:
+    get:
+      tags: [members]
+      security: [{ bearerAuth: [] }]
+      summary: Get current member profile
+      responses:
+        '200':
+          description: Current member profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberMe' }
+    put:
+      tags: [members]
+      security: [{ bearerAuth: [] }]
+      summary: Update current member profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberUpdate' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberMe' }
+  /api/members/{id}/:
+    get:
+      tags: [members]
+      summary: Get public member info
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Public member
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberPublic' }
+  /api/ads/:
+    get:
+      tags: [ads]
+      summary: List ads with filters
+      parameters:
+        - in: query
+          name: category
+          schema: { type: string, enum: [auto, realty] }
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: price_min
+          schema: { type: number }
+        - in: query
+          name: price_max
+          schema: { type: number }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: page_size
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Paginated ads list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdsListResponse' }
+    post:
+      tags: [ads]
+      security: [{ bearerAuth: [] }]
+      summary: Create ad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdCreateUpdate' }
+      responses:
+        '201':
+          description: Created ad
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
+  /api/ads/{id}/:
+    get:
+      tags: [ads]
+      summary: Get ad by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ad
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
+    put:
+      tags: [ads]
+      security: [{ bearerAuth: [] }]
+      summary: Update ad by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdCreateUpdate' }
+      responses:
+        '200':
+          description: Updated ad
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
+    delete:
+      tags: [ads]
+      security: [{ bearerAuth: [] }]
+      summary: Delete ad by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Deleted }
+  /api/chat/threads/:
+    get:
+      tags: [chat]
+      security: [{ bearerAuth: [] }]
+      summary: List my chat threads
+      responses:
+        '200':
+          description: Threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatThread' }
+    post:
+      tags: [chat]
+      security: [{ bearerAuth: [] }]
+      summary: Create or get chat thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_id: { type: integer }
+                ad_id: { type: integer, nullable: true }
+              required: [recipient_id]
+      responses:
+        '201':
+          description: Thread
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThread' }
+  /api/chat/threads/{thread_id}/messages/:
+    get:
+      tags: [chat]
+      security: [{ bearerAuth: [] }]
+      summary: List messages in thread
+      parameters:
+        - in: path
+          name: thread_id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Message' }
+    post:
+      tags: [chat]
+      security: [{ bearerAuth: [] }]
+      summary: Send message to thread
+      parameters:
+        - in: path
+          name: thread_id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageCreate' }
+      responses:
+        '201':
+          description: Created message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
